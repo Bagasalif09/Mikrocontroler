@@ -1,0 +1,70 @@
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+#define ONE_WIRE_BUS 2  
+#define HEATER_PIN 5    
+
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+
+double Setpoint, Input, Output;
+double Kp = 2.0, Ki = 5.0, Kd = 1.0; 
+double lastInput, I_term;
+unsigned long lastTime;
+
+int PWMValue;
+
+void setup() {
+  Serial.begin(9600);
+  
+  sensors.begin();
+  Setpoint = 25.0;
+  
+  pinMode(HEATER_PIN, OUTPUT);
+  
+  lastTime = millis() - 100;
+  I_term = 0;
+}
+
+void loop() {
+  sensors.requestTemperatures();
+  Input = sensors.getTempCByIndex(0);
+  Serial.print("Suhu: ");
+  Serial.print(Input);
+  Serial.print(" °C, Setpoint: ");
+  Serial.println(Setpoint);
+
+  computePID();
+  
+  analogWrite(HEATER_PIN, PWMValue);
+
+  delay(1000);
+}
+
+void computePID() {
+  unsigned long now = millis();
+  double timeChange = (double)(now - lastTime);
+  
+  // Hitung error
+  double error = Setpoint - Input;
+  
+  // Hitung komponen integral
+  I_term += (Ki * error * timeChange / 1000.0);
+  
+  // Hitung komponen derivatif
+  double dInput = (Input - lastInput) / (timeChange / 1000.0);
+  
+  // Hitung Output PID
+  Output = (Kp * error) + I_term - (Kd * dInput);
+  
+  // Batasi output ke rentang PWM (0-255)
+  if (Output > 255) Output = 255;
+  else if (Output < 0) Output = 0;
+  
+  // Simpan hasil ke PWM
+  PWMValue = (int)Output;
+
+  // Simpan nilai input dan waktu untuk iterasi berikutnya
+  lastInput = Input;
+  lastTime = now;
+}
